@@ -1,0 +1,285 @@
+\documentclass[pageno]{jpaper}
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+
+\newcommand{\IWreport}{2016}
+\newcommand{\quotes}[1]{``#1''}
+
+\begin{document}
+\title{
+\textit{Bookbag}: A Web Application for Collaborative Textbook Authoring and Distribution to Students}
+
+\author{Christopher Giglio\\Adviser: Robert Fish\\January 10, 2017}
+
+\date{}
+\maketitle
+
+\thispagestyle{empty}
+\doublespacing
+\vspace{8mm}
+
+\begin{abstract}
+
+This paper details the development of Bookbag, a web-based platform for collaboratively authoring and distributing academic materials like textbooks, specifically focusing on the database design and server implementation. As students, we realized that we were spending far too much on textbooks each semester without receiving our money's worth in value from those books. When we spoke with professors about their feelings about textbooks, they voiced concerns about the challenge of either finding a textbook that suits their course's needs or compiling a decentralized collection of writings to give to their students. Moreover, professors who wish to write a textbook can be prevented from doing so because of the difficulty of getting a publisher or meeting that publisher's requirements. This paper begins by discussing the current state of the college textbook industry and our motivation for building Bookbag. It then moves to discuss work done in collaborative academic authorship, followed by how Bookbag is formulated to be truly unique and innovative. Then, I lay out the approach we took to design and develop Bookbag, from our decision to make it a web application to the technical details of its underlying structure. In particular, this paper focuses on my work as the API and database engineer of the application, working to link my partners' work on the client-side and git-related code. It then moves into the results of our work, the business model Bookbag is built on, and, finally, final conclusions and considerations for future work. The result of our work is an intuitive product that offers a way to revolutionize how academic materials are created for and distributed to students at a significantly lower cost.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% INTRODUCTION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+This project originated from our desire to improve the current textbook situation for students. When we were discussing how to reduce textbook costs to students, we originally believed that a "Netflix for Textbooks" model that allowed students to check books out for a semester could alleviate the issue. After coming to believe that this may not be an optimal solution, we then considered offering a platform that completely digitized existing textbooks or collected digitized versions of textbooks. This idea, we realized, would be fraught with legal complications and stray from the computer science-focused mission we were on.
+
+Research has shown that students spend, on average, \$311 per semester on textbooks. Given that students already pay an average of about \$21,000 per year in tuition fees, this amounts to approximately a 3\% "tax" on students over the course of the year. As a result of the nearly 800\% rise in textbook costs over the past 30 years, 65\% of students opted not to buy a textbook because it was too expensive. These numbers all point to the reality that the college textbook industry is ripe for disruption and in dire need of innovation.
+
+In one conversation we had with Dr. Fish, he suggested that we consider tackling the problem of textbook \textit{authorship}, as professors often face an exceptionally high bar to actually producing academic works for use in the classroom. It was from this suggestion that we developed the idea for Bookbag: a platform for professors to author textbooks and then disseminate them to their students.
+
+One of our early key insights was that authorship is difficult in part because professors have to publish the entire textbook at once and are often not collaborating on the textbooks. Because of these issues, we decided that Bookbag should be a platform that allowed professors to collaboratively author \textit{chapters} of textbooks rather than entire books; those chapters could then be collected as a \textit{course} by the professor to create a course book.
+
+Although we found products that implemented features of what we envisioned for Bookbag, no one product offered an academically rigorous collaboration and distribution service for academic writing. In this paper, I will discuss:
+
+\begin{itemize}
+    \item Existing products that offer the features of and provided the inspiration for Bookbag in Section \ref{relwork}
+    \item The full feature-set of Bookbag, including how the experience differs for professors and students in Section \ref{approach}.
+    \item How I designed and built a server and database to implement the functionality of Bookbag in Section \ref{implementation}
+    \item The results of my server and database implementations: what features were successfully implemented, how they perform, and what works well or poorly with them in Section \ref{results}.
+    \item How Bookbag as a product could be brought to market and monetized in Section \ref{model}
+    \item Final conclusions and thoughts on what more could be done with Bookbag in Section \ref{final}
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% RELATED WORK
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Related Work} \label{relwork}
+
+Currently, there are numerous platforms that enable collaborative authorship or centralize academic texts. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% APPROACH
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Approach} \label{approach}
+
+Bookbag aims to solve the difficulties of both professors and students by allowing users to both create and curate academic materials on the same platform. By doing so, Bookbag cuts out publishing middlemen and guarantees the shortest possible path of information from professors to students. To achieve this end, we made the decision to separate the role of a content author (known as a \textit{professor}) and a content consumer (known as a \textit{student}).
+
+\subsection{Separating Professors and Students}
+\subsubsection{Professor Users}
+
+Professors are the content creators and providers of Bookbag: their role is to author \textit{chapters} and collect them into \textit{courses}. Chapters are meant to be a professor's – or group of professors' – attempt to write on a small, manageable topic. For instance, a biology professor may write a chapter on Cellular Respiration, or a Computer Science Professor could write a chapter on Quicksort. Each chapter is initially private, available only to the professor who made it, known as the owner. The owner may add as many contributing professors as they like, each of whom may upload files to the shared folder that serves as the basis for the chapter they are authoring. When the owner feels comfortable with the chapter, they may make it public by hitting the \textit{publish} button and choosing a single .pdf file from within the chapter folder to be made public. The concepts of updating the folder and publishing the chapter will be further discussed in \textbf{Abstracting Version Control}. 
+
+In addition to authoring chapters, professors may aggregate both the chapters that they have authored/contributed to and those that other professors have worked on into a \textit{course}. A course is simply a collection of chapters that can be toggled between public and private to students.A professor is expected to spend most of their time on Bookbag either collaboratively authoring chapters or compiling courses for their students.
+\subsubsection{Student Users}
+
+Students are the content consumers of Bookbag: their role is to subscribe to courses that professors create and to add standalone chapters to folders that they curate. A Student's capabilities are few but exceptionally powerful, as they have access to all the public content in Bookbag's library. While it is expected that professors will generally assemble courses for their students and then make them available to subscribe to, the situation will almost invariably occur where a student wishes to create their own "course." To deal with this, Bookbag allows students to create \textit{folders} where they can place standalone chapters. These folders can be used to curate texts for classes, research papers, or anything else that a student could imagine.
+
+\subsection{Abstracting Version Control}
+
+Bookbag is built from the ground-up to be a collaborative tool for professors. As Computer Science concentrators, all of us have experience using version control tools to simultaneously work on code offline and then merge changes. While exceptionally powerful, version control tools such as git can be unapproachable to non-STEM concentrators; as such, we wanted to offer the functionality of version control with a more elegant exterior. To do this, Bookbag offers a simplified version of the git tool to enable collaborative chapter authoring.
+
+Bookbag uses the metaphor of a library book to help professors understand how version control works on the platform. One user at a time is allowed to \textit{check out} the library book and make changes to it. While one user has the library book, no other users may make changes to it, although they may browse its contents. In fact, they can make their own changes on the side, but they are not able to \textit{check in} those changes; only the user who has the book checked out may do so. A professor must check the book back in within a certain number of hours after they check it out (determined by the owner), otherwise they will find they no longer have the book! Once the book has been checked back in, a new professor may check it out and make their edits. Each check in is marked as a new version of the chapter, complete with its own message to explain what was changed.
+
+While this model does not include some of the most powerful features of git, such as merging and branching, it does provide professors without knowledge of version control to use some aspects of the software. The largest advantage of this approach is that it allows us to maintain simultaneous versions of all files in a chapter at all times. This means that if a professor wants to reference an earlier version of a file, they simply request to see that version and it appears – without issue.
+
+\subsection{Building on top of Github}
+To create our version control system, we built an abstraction over Github that provides many of git and Github's features in a simplified interface. Although we could have added more features if we had assumed a prior knowledge of git, such as branching and merging, that would have limited the size of our professor audience to those in computer science and STEM fields. Bookbag allows for both collaboration and version control with the feature set of Github while using a more approachable terminology. This makes Bookbag an accessible gateway to powerful collaboration technologies that many professors may never have seen or heard of before.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Implementation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementation} \label{implementation}
+
+
+When building Bookbag, we needed to determine what technologies would be necessary to realize such a vision. Our application would need to choose a platform, have a server with an API, maintain a database, and provide a way to abstract away Github. This section will explain the technical architecture displayed in \textbf{Figure 1}, primarily focusing on how the server facilitates all of the interactions in Bookbag.
+
+\subsection{Platform and Client Technology}
+
+In order to reach the largest possible audience on the most devices, we decided to remain platform-agnostic and build Bookbag as a web application. This enables students on both Windows, macOS, and Linux to access the content that Bookbag provides from their devices. The client interface is built in ReactJS.
+
+\subsection{Database}
+
+Bookbag utilizes a PostgreSQL database to store all data except for the actual chapters. The database is provided by Heroku, which is hosted remotely. Although I did consider using a more flexible NoSQL database, I elected to use a PostgreSQL database for a few reasons. Firstly, Heroku, which also hosts the entire Bookbag codebase, offers a PostgreSQL service that integrates extremely well with Node.js using a module known as node-postgres. Additionally, a relational database seemed to be a better choice than a non-relational database because of how naturally Bookbag's data fit into a relational model. 
+
+\subsubsection{Database Architecture}
+
+Designing a fast, scalable database was important to ensuring that Bookbag remained usable. This meant creating a scheme of tables that stored enough data to be useful while being lean enough to avoid exponential growth. One thing to note about the design of the database is that although PostgreSQL does support arrays, I tried to avoid them wherever possible. From what I gathered while conducting research on PostgreSQL design practices, I found that arrays tend not to scale well or provide the same feature-richness as tables.
+
+The main tables in the database are users, courses, and chapters. Each user, course, and chapter receives a unique 8 byte identifier that is generated by the PL/pgSQL function shown in the Appendix; that function is triggered on insertion into each of those tables to create the unique identifier. The function guarantees that the id is completely unique to the table to eliminate the possibility of collisions, while the id column in the table has a redundant protection against double insertions of id's. In fact, every single id column in the database has a PostgreSQL UNIQUE protection on it, ensuring that, for instance, no chapter is added twice to a course or no course is added twice to a student's library.
+
+When passing data between the client and server, as well as around the server and database, these unique identifiers serve as the main way to fetch information. If the user is a student, then they will have a table listing their courses and a table listing their folders; the folder table is titled as (student.id)\_folders and the courses table is titled as (student.id)\_courses. This convention allows for all of a user's information to be discovered simply by knowing their id, which makes for incredibly fast look-ups that ask for very little information in client request bodies. Each folder table has only a single column, id, that provides the unique id of a folder, whose chapters are accessible in the table (student.id)(folder.id)\_chapters, which contains id's of chapters. Each row in the student's course table simply contains the id of a course, which can then be used to get the course's full information in the course table.
+
+When the user is a professor, they have two associated tables in the database: (professor.id)\_working\_chapters, which holds the chapters that a professor owns or is contributing to, and (professor.id)\_working\_courses, which contains courses a professor has created. As one would expect, the former holds the id's of chapters in the chapters table, while the latter holds id's of courses in the courses table. It is important to note that both public and private chapters and courses are held in the chapters and courses tables. To make sure that queries do not turn up private items, the queries look out for the private flag on an item when determining if they should return that item.
+
+Bookbag's database architecture is designed to be fast and scalable by growing at a rate that is linear with the number of courses, chapters, and users. Every new chapter or course produces exactly one table, a student subscribing to a chapter or course produces exactly one table, and a new folder produces exactly one table. Because the tables are engineering around unique id's that have redundant uniqueness protections, we can guarantee that there will be no database id collisions as long as any one category of id has less than 2\textsuperscript{256} items. We believe that this number is sufficiently large to ensure that Bookbag will have no issue with collisions and that lookups will remain safe and fast.
+
+\subsection{Git Module}
+
+Bookbag's Github abstraction is created and managed by a module on the server that uses the Github API to communicate with the repositories. It is written in JavaScript and kept separate from the database module and server.
+
+\subsection{Server and Hosting}
+
+The server that underlies Bookbag is built in Node.js and Express.js. It provides a web Application Programming Interface (API) for the client to access the database and Github repositories. The server code is hosted on Heroku, which automatically scales to provide the resources necessary for the number of users on Bookbag.
+
+\subsubsection{Modules Overview}
+
+Node.js is a powerful, open-source framework for building server-side web applications in JavaScript. Node Package Manager (npm) is build around Node and allows for any number of free and open extensions, known as modules, to be added to a Node project. Express.js is one of these modules, which provides convenience methods for HTTP routing to allow the server to fulfill HTTP requests such as GET, POST, and more.
+
+\subsubsection{Writing Asynchronous Server Code}
+
+An important feature of Node is that it runs asynchronously, meaning that the code is not guaranteed to execute in the order it was written. While this can have tremendous performance benefits for Bookbag, it requires a careful and considerate programming style. The most notable stylistic change required by Node is the use of callback functions, which are functions that are passed through as parameters to other functions. Because code does not always execute in order, Node required me to program in smaller functions that call one another upon completion to ensure that the stack executed properly.
+
+\subsubsection{Routing}
+
+The entire Bookbag API is built as a set of POST HTTP requets provided by Express. In addition to providing the ability to receive a request, Express provides the functionality to write \textit{middleware}; middleware allows for multiple distinct API requests to be processed by the same code after the main processing has been done. Bookbag takes advantage of a few critical pieces of middleware.
+
+Error handling is one of the most important pieces handled by Express middleware. If there is ever an error with a PostgreSQL query or Github request, Express' middleware steps in to catch and log the error to prevent server failure and provide useful stack trace information to developers.
+
+Webpack is another piece of middleware that allows for every API request to be bundled with the necessary node modules that will be needed by the client.
+
+Finally, bodyParser is an exceptionally useful middleware that allows for Node to be able to read HTTP requests. It helped me to parse the request objects as JSONs so that the server could read the data being sent to it.
+
+\subsubsection{Database Interactions}
+
+In order for the server to interact with the database, it needed a special module known as node-postgres. This module allowed me to write SQL queries to the PostgreSQL database in JavaScript from the server. To view the contents of the database, as well as modify them outside of the JavaScript environment, I used psql, the command line tool that permits PostgreSQL database manipulation. All of the code for database interactions was kept in a separate file from the server code and instead comprised its own database module that I wrote on top of node-postgres.
+
+All of the database queries written in Bookbag's database module follow the  same general design pattern. At the beginning of each method is a call to establish a connection to the database, opening up a session. It is important to note that in order for the database to function well, every connection must be \textit{closed} before the function returns, otherwise the server will become unresponsive. Once the connection is opened, the function can make any query it would like; if the query is meant to return rows from the database, the rows must be added to a result object which can then be acted on. 
+
+Because node-postgres is written on top of Node, it too is asynchronous. This means that all of the database interactions I wrote had to be careful not to violate the basic principles laid out in \textbf{Writing Asynchronous Code}. In particular, this meant that database module methods that required multiple queries either had to make use of callback functions to ensure proper execution order or take advantage of node-postgres functions that did not fire until the completion of a query.
+
+\subsubsection{Git Interactions}
+
+Interactions with the Github repositories, like interactions with the server, were kept in a module separate from the actual server. Although I did not build the git module, I was responsible for making its functions available to the client via the server's API. In many APIs, such as the API that creates a new chapter for a professor, a mix of database actions and git actions are necessary. In the example of creating a new chapter, the server first asks the git module to create a repository and return it relevant information about the repository. Then, the server relays that data to the database module, which makes the appropriate PostgreSQL queries to populate the database with information about the new chapter.
+
+\subsection{Users}
+
+\subsubsection{User Data and Security}
+
+All user data is stored in the database in a table of users. To support all of Bookbag's operations, users are stored with their first name, last name, whether or not they are a professor, their email, their unique identifier, and a hash of their password.
+
+\subsubsection{Password Hashing}
+
+To ensure the security of a user's password, it is hashed with the bcrypt algorithm using the module bcrypt-nodejs. When the server receives a password from the client creating an account, it hashes it and then inserts it into the database. When the server attempts to log a user in, it hashes the attempted password and compares it against the hashed password in the database to provide an additional layer of security.
+
+\subsubsection{Authentication and JSON Web Tokens}
+
+Because we do not want unverified users creating chapters, we value the legitimacy of each user session. To ensure that a user is logged in and allowed to call the API they request, any API call that requires the user to be logged in is protected by a JSON Web Token.
+
+A JSON Web Token (JWT) is an encrypted JSON object that is placed in the header of an API request. It contains three sections: a header, a payload, and a signature. The header contains simple information declaring it as a JWT, the payload contains information about the user, and the signature has metadata about the JWT (such as when it will expire). Upon logging in or signing up, the client receives a fresh JWT from the server. The JWT is completely unreadable to the client, as it has been encoded in a format that only the server can read. Whenever the client wishes to make a request, it sends the encrypted JWT token to the server, providing verification alongside valuable information about the user that might be used to make look-ups in the database about the user. On Bookbag, after 12 hours the JWT expires and the user must be re-issued a JWT to remain authenticated.
+
+By using JWT's, Bookbag ensures that no API request is made from outside of Bookbag. This keeps our API proprietary and ensures that only valid users may make API requests.
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Results
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Results} \label{results}
+
+Evaluating Bookbag requires examining how its current functionality solves the issues laid out in Section \label{intro} of this paper.
+
+\subsection{Student Results}
+
+Currently, a student is able to subscribe to courses, create folders, and add chapters to folders. This means that, for the most part, the usefulness of a student account is dependent on the quantity and quality of what professors publish to Bookbag. Moreover, students may add content to their libraries only via search; there currently exists no recommendation engine or a way for a professor to send information to students via Bookbag. That being said, the basic library management functions of Bookbag are in place with the exception of deletion. There are numerous other pieces of server and database functionality that are ready to to be added to Bookbag, outlined in Future Work, that are not in the current Bookbag implementation. If a student were given access to Bookbag at the time of this writing, they would have the tools necessary to fully embrace all of the information that their professor wished to pass along to them digitally.
+
+\subsection{Professor Results}
+
+The functionality currently available to professors in Bookbag is extensive and exceptionally powerful. The server and database are able to support all of the main operations a professor might wish to accomplish regarding chapter and course creation. Professors can create a chapter, add contributors, upload files to the chapter, publish it to students, see previous versions, and download files from the chapter. With courses, professors may create a course, add chapters to it either from their own library or via search of Bookbag's catalogue, remove chapters, publish to the public, and change information about the course. This feature set allows for professors to capture much of the value behind the original Bookbag concept. Once again, there is even more functionality that is outlined in Future Work that is ready to be integrated into the User Interface that exists on the server.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Business Model
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Business Considerations} \label{model}
+
+\subsection{Business Model}
+
+Given that Bookbag was created in a seminar on entrepreneurship for computer scientists, it was designed with a business model in mind. Specifically, Bookbag was designed not to provide lucrative profits to a few professors, but rather moderate profits to many professors while keeping costs to students low. Ultimately, the model we present was designed to incentivize collaboration and content creation by professors.
+
+Bookbag's business model is molded after Spotify's. Spotify, a popular music-streaming service, structures its revenue as follows: it collects a monthly subscription fee from users, takes a portion of the revenue, and divides the remainder among the artists who publish on its platform. Artists are payed the same percentage of the remaining revenue as the percentage of their songs' plays make up of total songs played. In other words, if an artist has their songs streamed a million times, and Spotify streams a billion songs, then that artist will receive .1\% of the revenue Spotify takes in after they have removed their cut.
+
+To extend this model to Bookbag, we would do the following. Students would be charged a flat yearly or semesterly fee that they would pay to Bookbag. After taking a percentage of that money, the rest would be divided first among the different chapters; a student's subscription to a chapter would be analogous to a "stream" in Spotify. Then, the money allotted to a chapter would be divided among the contributors to the chapter based on a scheme that the contributors and owners vote on. We believe that allowing each chapter community to decide how to split profits is the best way to distribute the wealth that Bookbag generates. While we considered other schemes, such as dividing the wealth based on who contributes the largest percentage of the chapter, we believe that these less-democratic alternatives could result in lower-quality work.
+
+We believe that this model offers a moderate payment scheme to professors, with the goal of it being to encourage professor who would otherwise not author content to begin writing down their knowledge. While this model would not be as lucrative for professors who currently author textbooks, it would provide a reasonable side source of income for professors who have never authored textbooks but decide to contribute.
+
+\subsection{Profit Potential Scenarios}
+
+In this section, we consider multiple profit scenarios for Bookbag and professors given different numbers of users, professors, and fees. Please see Table \ref{table:profit} for the scenarios.
+
+\begin{table}[hbt]
+  \centering
+  \begin{tabular}{|l|l|l|l|l|} \hline
+     & 
+     \textbf{Phase 1} & 
+     \textbf{Phase 2} & 
+     \textbf{Phase 3} &
+     \textbf{Phase 4}\\\hline
+    
+    \# Students subscribed &
+    2,500 &
+    50,000 &
+    250,000 &
+    1M \\\hline
+    
+    \# Professors contributing &
+    100 & 
+    1,000 & 
+    10,000 &
+    20,000 \\\hline
+    
+    \# Chapters on site &
+    200 & 
+    1,000 & 
+    5,000 &
+    10,000 \\\hline
+    
+    \# Avg. Chapters/Student &
+    20 & 
+    30 &
+    50 & 
+    60 \\\hline
+    
+   \textbf{Profit / Semester / Chapter:} & & & &\\\hline
+   
+   \hspace{3mm}- Subscription cost: \$75 & & & &\\\hline
+   
+   \hspace{3mm}- Subscription cost: \$100 & & & &\\\hline
+   
+   \hspace{3mm}- Subscription cost: \$125 & & & &\\\hline
+    
+  \end{tabular}
+  \caption{Profit potential.}
+  \label{table:profit}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Potential Improvements
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Potential Improvements} \label{final}
+
+\subsection{Planned Improvements}
+There are a number of improvements to Bookbag's functionality that we had mapped out but did not have the chance to implement in the current version. A major feature we designed was the ability for students to privately add additional chapters, or even their own files, to courses. Known as "notes," these files would appear only to the user who added them. For instance, if a student felt that the course their professor created was inadequate, or that they preferred an alternative to a chapter that their professor had provided, they could add another chapter or upload their own .pdf file to their own version of the course. No other users would see this, but it would provide far more flexibility to students. We also hoped to extend the ability to upload personal files to folders as well. Currently, the database supports the addition of notes that are chapters to courses, but does not support the separate upload of files. Ultimately, the functionality was built on the server but did not receive the User Interface elements to support it.
+
+Another major feature we planned but were not able to implement was the ability to suggest chapters and courses to students. Dubbed the "Browse" area, it would provide users with intelligent suggestions as to what courses or chapters they may want to look at. 
+
+In addition to the major features listed above, we also wanted to implement a collection of smaller, useful features that did not make it into this version of Bookbag. These included the ability:
+
+\begin{itemize}
+    \item For students to remove a course from their library (built but not implemented).
+    \item For students to remove a chapter from a folder (built but not implemented).
+    \item For students to remove folders from their library (built but not implemented).
+    \item For professors to have access to the ability to curate a library as students do – with the ability to subscribe to courses and chapters – so that they would not have to maintain separate accounts for their authoring and research duties. All of the functionality was built, but we simply did not have time to copy the client-side code from the student into the professor.
+\end{itemize}
+
+\subsection{Further Improvements}
+
+In addition to the features that we had planned to build but did not have time to integrate into Bookbag, there were numerous features we imagined could expand upon and enhance the Bookbag experience. One such feature would be a form of in-app communication that would allow for users to share content with one another. For instance, if professors could share courses with their students or students could share courses and chapters with their peers, Bookbag would improve as a tool for knowledge dissemination.
+
+Another exceptionally useful feature would be the ability to integrate communication tools for within a chapter community. This could come in the form of a message board, Slack integration, or Slack channel-like functionality. This would enable professors to communicate and collaborate more effectively on their chapters. Also, providing a visual interface to show the git differences would be an incredible visual enhancement to Bookbag that would help professors more easily track chapter progress.
+
+Notifications, both in-app and via email, would be another way to enhance the Bookbag experience. Offering updates on the progress of chapters, release of new versions, check-in/check-out events, and more would keep users up to date on the latest from Bookbag.
+
+\section{Conclusions}
+
+\section{Acknowledgements}
+
+\end{document}
